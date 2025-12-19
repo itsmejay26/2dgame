@@ -1,0 +1,1262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>ECHO MIND - A Game of Thought Echoes</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        :root {
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #12121a;
+            --accent-cyan: #00f5ff;
+            --accent-purple: #b829dd;
+            --accent-pink: #ff2d95;
+            --accent-gold: #ffd700;
+            --text-primary: #ffffff;
+            --text-secondary: rgba(255, 255, 255, 0.6);
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+        }
+
+        #game-container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .screen {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.8s ease;
+        }
+
+        .screen.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        /* Background particles */
+        #particles-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+        }
+
+        /* Title Screen */
+        #title-screen {
+            background: radial-gradient(ellipse at center, #1a1a2e 0%, #0a0a0f 100%);
+            z-index: 1;
+        }
+
+        .title-container {
+            text-align: center;
+            z-index: 2;
+        }
+
+        .game-title {
+            font-size: clamp(2.5rem, 10vw, 5rem);
+            font-weight: 100;
+            letter-spacing: 1.5rem;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple), var(--accent-pink));
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            animation: titleGlow 3s ease-in-out infinite;
+        }
+
+        .game-subtitle {
+            font-size: clamp(0.8rem, 3vw, 1.2rem);
+            font-weight: 300;
+            letter-spacing: 0.5rem;
+            color: var(--text-secondary);
+            margin-bottom: 3rem;
+        }
+
+        @keyframes titleGlow {
+            0%, 100% { filter: drop-shadow(0 0 20px rgba(0, 245, 255, 0.3)); }
+            50% { filter: drop-shadow(0 0 40px rgba(184, 41, 221, 0.5)); }
+        }
+
+        .start-prompt {
+            font-size: clamp(0.9rem, 3vw, 1.1rem);
+            color: var(--text-secondary);
+            animation: pulse 2s ease-in-out infinite;
+            cursor: pointer;
+            padding: 1rem 2rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 50px;
+            transition: all 0.3s ease;
+        }
+
+        .start-prompt:hover, .start-prompt:active {
+            border-color: var(--accent-cyan);
+            color: var(--accent-cyan);
+            box-shadow: 0 0 30px rgba(0, 245, 255, 0.2);
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.6; }
+            50% { opacity: 1; }
+        }
+
+        /* Game Screen */
+        #game-screen {
+            background: var(--bg-primary);
+        }
+
+        .game-header {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            padding: 1rem 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 10;
+            background: linear-gradient(to bottom, rgba(10, 10, 15, 0.9), transparent);
+        }
+
+        .level-indicator {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            letter-spacing: 0.2rem;
+        }
+
+        .level-number {
+            color: var(--accent-cyan);
+            font-weight: 600;
+        }
+
+        .mind-state {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .mind-icon {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: conic-gradient(var(--accent-cyan), var(--accent-purple), var(--accent-pink), var(--accent-cyan));
+            animation: mindRotate 4s linear infinite;
+        }
+
+        @keyframes mindRotate {
+            to { transform: rotate(360deg); }
+        }
+
+        .mind-value {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--accent-cyan);
+        }
+
+        /* Main Game Area */
+        .game-area {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 5rem 1.5rem 2rem;
+            position: relative;
+        }
+
+        /* Echo Grid - The Core Mechanic */
+        .echo-grid {
+            display: grid;
+            gap: 8px;
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            position: relative;
+            max-width: 95vmin;
+            max-height: 60vmin;
+        }
+
+        .echo-cell {
+            aspect-ratio: 1;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+            min-width: 50px;
+            min-height: 50px;
+        }
+
+        .echo-cell::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at center, transparent 30%, rgba(0, 0, 0, 0.3));
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .echo-cell:active::before {
+            opacity: 1;
+        }
+
+        .echo-cell.revealed {
+            transform: scale(0.95);
+        }
+
+        .echo-cell.echo-cyan {
+            background: linear-gradient(135deg, rgba(0, 245, 255, 0.4), rgba(0, 245, 255, 0.1));
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 20px rgba(0, 245, 255, 0.3), inset 0 0 20px rgba(0, 245, 255, 0.1);
+        }
+
+        .echo-cell.echo-purple {
+            background: linear-gradient(135deg, rgba(184, 41, 221, 0.4), rgba(184, 41, 221, 0.1));
+            border-color: var(--accent-purple);
+            box-shadow: 0 0 20px rgba(184, 41, 221, 0.3), inset 0 0 20px rgba(184, 41, 221, 0.1);
+        }
+
+        .echo-cell.echo-pink {
+            background: linear-gradient(135deg, rgba(255, 45, 149, 0.4), rgba(255, 45, 149, 0.1));
+            border-color: var(--accent-pink);
+            box-shadow: 0 0 20px rgba(255, 45, 149, 0.3), inset 0 0 20px rgba(255, 45, 149, 0.1);
+        }
+
+        .echo-cell.echo-gold {
+            background: linear-gradient(135deg, rgba(255, 215, 0, 0.4), rgba(255, 215, 0, 0.1));
+            border-color: var(--accent-gold);
+            box-shadow: 0 0 20px rgba(255, 215, 0, 0.3), inset 0 0 20px rgba(255, 215, 0, 0.1);
+        }
+
+        .echo-cell.wrong {
+            animation: wrongPulse 0.5s ease;
+        }
+
+        @keyframes wrongPulse {
+            0%, 100% { background: rgba(255, 50, 50, 0.3); }
+            50% { background: rgba(255, 50, 50, 0.6); }
+        }
+
+        .echo-cell.correct {
+            animation: correctPulse 0.4s ease;
+        }
+
+        @keyframes correctPulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
+        /* Pattern Display */
+        .pattern-indicator {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 1.5rem;
+            font-weight: 200;
+            color: var(--text-secondary);
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+
+        .pattern-indicator.visible {
+            opacity: 1;
+        }
+
+        /* Game Instructions */
+        .game-instruction {
+            margin-top: 2rem;
+            font-size: clamp(0.85rem, 3vw, 1rem);
+            color: var(--text-secondary);
+            text-align: center;
+            max-width: 300px;
+            line-height: 1.6;
+            opacity: 0.8;
+        }
+
+        .instruction-highlight {
+            color: var(--accent-cyan);
+        }
+
+        /* Phase Indicator */
+        .phase-indicator {
+            position: absolute;
+            bottom: 15%;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .phase-text {
+            font-size: 0.75rem;
+            letter-spacing: 0.3rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+        }
+
+        .phase-bar {
+            width: 150px;
+            height: 3px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .phase-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent-cyan), var(--accent-purple));
+            border-radius: 2px;
+            transition: width 0.3s ease;
+        }
+
+        /* Thought Echo Visualization */
+        .thought-echo {
+            position: absolute;
+            pointer-events: none;
+            border-radius: 50%;
+            border: 2px solid;
+            opacity: 0;
+            animation: echoExpand 1.5s ease-out forwards;
+        }
+
+        @keyframes echoExpand {
+            0% {
+                transform: scale(0);
+                opacity: 0.8;
+            }
+            100% {
+                transform: scale(3);
+                opacity: 0;
+            }
+        }
+
+        /* Result Screen */
+        #result-screen {
+            background: radial-gradient(ellipse at center, #1a1a2e 0%, #0a0a0f 100%);
+        }
+
+        .result-container {
+            text-align: center;
+            padding: 2rem;
+        }
+
+        .result-title {
+            font-size: clamp(1.8rem, 8vw, 3rem);
+            font-weight: 200;
+            margin-bottom: 1rem;
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+
+        .result-stats {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 1rem 1.5rem;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .stat-label {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .stat-value {
+            color: var(--accent-cyan);
+            font-weight: 600;
+        }
+
+        .play-again-btn {
+            margin-top: 2rem;
+            padding: 1rem 3rem;
+            font-size: 1rem;
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+            border: none;
+            border-radius: 50px;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-family: inherit;
+        }
+
+        .play-again-btn:active {
+            transform: scale(0.95);
+        }
+
+        /* Tutorial Overlay */
+        .tutorial-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(10, 10, 15, 0.95);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+            z-index: 100;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.5s ease;
+        }
+
+        .tutorial-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .tutorial-content {
+            max-width: 350px;
+            text-align: center;
+        }
+
+        .tutorial-title {
+            font-size: 1.5rem;
+            font-weight: 300;
+            margin-bottom: 1.5rem;
+            color: var(--accent-cyan);
+        }
+
+        .tutorial-text {
+            font-size: 1rem;
+            line-height: 1.8;
+            color: var(--text-secondary);
+            margin-bottom: 2rem;
+        }
+
+        .tutorial-btn {
+            padding: 0.8rem 2rem;
+            font-size: 0.9rem;
+            background: transparent;
+            border: 1px solid var(--accent-cyan);
+            border-radius: 50px;
+            color: var(--accent-cyan);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-family: inherit;
+        }
+
+        .tutorial-btn:active {
+            background: var(--accent-cyan);
+            color: var(--bg-primary);
+        }
+
+        /* Perception Shift Effect */
+        .perception-shift {
+            animation: perceptionWave 0.8s ease;
+        }
+
+        @keyframes perceptionWave {
+            0%, 100% { filter: none; }
+            50% { filter: hue-rotate(30deg) brightness(1.1); }
+        }
+
+        /* Mind Focus Indicator */
+        .focus-ring {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border: 2px solid transparent;
+            border-radius: 20px;
+            pointer-events: none;
+            transition: border-color 0.5s ease;
+        }
+
+        .focus-ring.active {
+            border-color: var(--accent-cyan);
+            animation: focusPulse 1s ease infinite;
+        }
+
+        @keyframes focusPulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(0, 245, 255, 0.4); }
+            50% { box-shadow: 0 0 0 10px rgba(0, 245, 255, 0); }
+        }
+
+        /* Adaptive Difficulty Indicator */
+        .difficulty-adapt {
+            position: absolute;
+            top: 4rem;
+            right: 1rem;
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+
+        .difficulty-adapt.visible {
+            opacity: 1;
+        }
+
+        /* Mobile Optimizations */
+        @media (max-width: 480px) {
+            .echo-cell {
+                min-width: 45px;
+                min-height: 45px;
+            }
+
+            .game-header {
+                padding: 0.8rem 1rem;
+            }
+        }
+
+        @media (orientation: landscape) and (max-height: 500px) {
+            .game-area {
+                padding: 3.5rem 1rem 1rem;
+            }
+
+            .echo-grid {
+                max-height: 70vmin;
+            }
+
+            .phase-indicator {
+                bottom: 5%;
+            }
+        }
+
+        /* Haptic feedback visual */
+        .haptic-flash {
+            position: fixed;
+            inset: 0;
+            background: radial-gradient(circle at var(--x, 50%) var(--y, 50%), rgba(0, 245, 255, 0.1), transparent 50%);
+            pointer-events: none;
+            opacity: 0;
+            z-index: 1000;
+        }
+
+        .haptic-flash.active {
+            animation: hapticPulse 0.2s ease-out;
+        }
+
+        @keyframes hapticPulse {
+            0% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="particles-canvas"></canvas>
+        <div class="haptic-flash" id="haptic-flash"></div>
+
+        <!-- Title Screen -->
+        <div id="title-screen" class="screen active">
+            <div class="title-container">
+                <h1 class="game-title">ECHO</h1>
+                <p class="game-subtitle">A GAME OF THOUGHT ECHOES</p>
+                <div class="start-prompt" id="start-btn">TAP TO ENTER YOUR MIND</div>
+            </div>
+        </div>
+
+        <!-- Game Screen -->
+        <div id="game-screen" class="screen">
+            <div class="game-header">
+                <div class="level-indicator">
+                    LEVEL <span class="level-number" id="level-display">1</span>
+                </div>
+                <div class="mind-state">
+                    <div class="mind-icon"></div>
+                    <span class="mind-value" id="mind-score">0</span>
+                </div>
+            </div>
+
+            <div class="difficulty-adapt" id="difficulty-indicator">
+                ADAPTING...
+            </div>
+
+            <div class="game-area">
+                <div class="echo-grid" id="echo-grid">
+                    <div class="focus-ring" id="focus-ring"></div>
+                    <div class="pattern-indicator" id="pattern-indicator">OBSERVE</div>
+                </div>
+
+                <div class="phase-indicator">
+                    <span class="phase-text" id="phase-text">WATCHING</span>
+                    <div class="phase-bar">
+                        <div class="phase-fill" id="phase-fill" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tutorial Overlay -->
+            <div class="tutorial-overlay" id="tutorial">
+                <div class="tutorial-content">
+                    <h2 class="tutorial-title">ECHO MIND</h2>
+                    <p class="tutorial-text">
+                        Your thoughts leave echoes.<br><br>
+                        Watch the pattern of colors.<br>
+                        Feel their sequence.<br>
+                        Then recreate what your mind remembers.<br><br>
+                        The game adapts to how you think.<br>
+                        Trust your perception.
+                    </p>
+                    <button class="tutorial-btn" id="tutorial-btn">BEGIN</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Result Screen -->
+        <div id="result-screen" class="screen">
+            <div class="result-container">
+                <h2 class="result-title" id="result-title">MIND ECHOED</h2>
+                <div class="result-stats">
+                    <div class="stat-item">
+                        <span class="stat-label">Levels Completed</span>
+                        <span class="stat-value" id="final-level">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Echo Score</span>
+                        <span class="stat-value" id="final-score">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Perception Accuracy</span>
+                        <span class="stat-value" id="final-accuracy">0%</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Mind State</span>
+                        <span class="stat-value" id="final-state">Awakening</span>
+                    </div>
+                </div>
+                <button class="play-again-btn" id="play-again-btn">ECHO AGAIN</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Game State
+        const GameState = {
+            level: 1,
+            score: 0,
+            lives: 3,
+            pattern: [],
+            playerInput: [],
+            phase: 'watching', // watching, recalling, feedback
+            gridSize: 3,
+            patternLength: 3,
+            showTime: 800,
+            colors: ['cyan', 'purple', 'pink', 'gold'],
+            totalAttempts: 0,
+            correctAttempts: 0,
+            consecutiveCorrect: 0,
+            consecutiveWrong: 0,
+            adaptiveDifficulty: 1,
+            isPlaying: false,
+            audioStarted: false
+        };
+
+        // DOM Elements
+        const screens = {
+            title: document.getElementById('title-screen'),
+            game: document.getElementById('game-screen'),
+            result: document.getElementById('result-screen')
+        };
+
+        const elements = {
+            startBtn: document.getElementById('start-btn'),
+            grid: document.getElementById('echo-grid'),
+            levelDisplay: document.getElementById('level-display'),
+            mindScore: document.getElementById('mind-score'),
+            phaseText: document.getElementById('phase-text'),
+            phaseFill: document.getElementById('phase-fill'),
+            patternIndicator: document.getElementById('pattern-indicator'),
+            focusRing: document.getElementById('focus-ring'),
+            tutorial: document.getElementById('tutorial'),
+            tutorialBtn: document.getElementById('tutorial-btn'),
+            difficultyIndicator: document.getElementById('difficulty-indicator'),
+            hapticFlash: document.getElementById('haptic-flash'),
+            playAgainBtn: document.getElementById('play-again-btn'),
+            finalLevel: document.getElementById('final-level'),
+            finalScore: document.getElementById('final-score'),
+            finalAccuracy: document.getElementById('final-accuracy'),
+            finalState: document.getElementById('final-state'),
+            resultTitle: document.getElementById('result-title'),
+            particlesCanvas: document.getElementById('particles-canvas')
+        };
+
+        // Audio System using Tone.js
+        let audioContext = {
+            synth: null,
+            ambientSynth: null,
+            initialized: false
+        };
+
+        function initAudio() {
+            if (audioContext.initialized) return;
+            
+            audioContext.synth = new Tone.PolySynth(Tone.Synth, {
+                oscillator: { type: 'sine' },
+                envelope: {
+                    attack: 0.02,
+                    decay: 0.3,
+                    sustain: 0.2,
+                    release: 0.8
+                }
+            }).toDestination();
+            audioContext.synth.volume.value = -12;
+
+            audioContext.ambientSynth = new Tone.FMSynth({
+                harmonicity: 3,
+                modulationIndex: 10,
+                oscillator: { type: 'sine' },
+                envelope: {
+                    attack: 0.5,
+                    decay: 0.5,
+                    sustain: 0.5,
+                    release: 2
+                },
+                modulation: { type: 'triangle' },
+                modulationEnvelope: {
+                    attack: 0.5,
+                    decay: 0.5,
+                    sustain: 0.5,
+                    release: 2
+                }
+            }).toDestination();
+            audioContext.ambientSynth.volume.value = -25;
+
+            audioContext.initialized = true;
+        }
+
+        async function startAudio() {
+            if (GameState.audioStarted) return;
+            await Tone.start();
+            initAudio();
+            GameState.audioStarted = true;
+        }
+
+        const colorNotes = {
+            cyan: ['C5', 'E5'],
+            purple: ['D5', 'F#5'],
+            pink: ['E5', 'G#5'],
+            gold: ['F#5', 'A5']
+        };
+
+        function playColorSound(color) {
+            if (!audioContext.synth || !GameState.audioStarted) return;
+            const notes = colorNotes[color];
+            audioContext.synth.triggerAttackRelease(notes, '8n');
+        }
+
+        function playSuccessSound() {
+            if (!audioContext.synth || !GameState.audioStarted) return;
+            audioContext.synth.triggerAttackRelease(['C5', 'E5', 'G5', 'C6'], '4n');
+        }
+
+        function playFailSound() {
+            if (!audioContext.synth || !GameState.audioStarted) return;
+            audioContext.synth.triggerAttackRelease(['A3', 'D#4'], '4n');
+        }
+
+        function playAmbientPulse() {
+            if (!audioContext.ambientSynth || !GameState.audioStarted) return;
+            const notes = ['C3', 'E3', 'G3', 'B3'];
+            const note = notes[Math.floor(Math.random() * notes.length)];
+            audioContext.ambientSynth.triggerAttackRelease(note, '2n');
+        }
+
+        // Particle System
+        class ParticleSystem {
+            constructor(canvas) {
+                this.canvas = canvas;
+                this.ctx = canvas.getContext('2d');
+                this.particles = [];
+                this.resize();
+                window.addEventListener('resize', () => this.resize());
+            }
+
+            resize() {
+                this.canvas.width = window.innerWidth;
+                this.canvas.height = window.innerHeight;
+            }
+
+            createParticle(x, y, color) {
+                return {
+                    x: x || Math.random() * this.canvas.width,
+                    y: y || Math.random() * this.canvas.height,
+                    vx: (Math.random() - 0.5) * 0.5,
+                    vy: (Math.random() - 0.5) * 0.5,
+                    radius: Math.random() * 2 + 1,
+                    color: color || `hsla(${180 + Math.random() * 60}, 70%, 60%, ${Math.random() * 0.3 + 0.1})`,
+                    life: 1
+                };
+            }
+
+            init(count = 50) {
+                this.particles = [];
+                for (let i = 0; i < count; i++) {
+                    this.particles.push(this.createParticle());
+                }
+            }
+
+            addBurst(x, y, color, count = 10) {
+                for (let i = 0; i < count; i++) {
+                    const particle = this.createParticle(x, y, color);
+                    particle.vx = (Math.random() - 0.5) * 4;
+                    particle.vy = (Math.random() - 0.5) * 4;
+                    particle.life = 1;
+                    this.particles.push(particle);
+                }
+            }
+
+            update() {
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+                this.particles = this.particles.filter(p => {
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    p.life -= 0.002;
+
+                    if (p.x < 0) p.x = this.canvas.width;
+                    if (p.x > this.canvas.width) p.x = 0;
+                    if (p.y < 0) p.y = this.canvas.height;
+                    if (p.y > this.canvas.height) p.y = 0;
+
+                    this.ctx.beginPath();
+                    this.ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                    this.ctx.fillStyle = p.color;
+                    this.ctx.globalAlpha = p.life;
+                    this.ctx.fill();
+                    this.ctx.globalAlpha = 1;
+
+                    return p.life > 0;
+                });
+
+                while (this.particles.length < 50) {
+                    this.particles.push(this.createParticle());
+                }
+
+                requestAnimationFrame(() => this.update());
+            }
+        }
+
+        const particles = new ParticleSystem(elements.particlesCanvas);
+        particles.init();
+        particles.update();
+
+        // Screen Management
+        function showScreen(screenName) {
+            Object.values(screens).forEach(screen => screen.classList.remove('active'));
+            screens[screenName].classList.add('active');
+        }
+
+        // Haptic Feedback Visual
+        function triggerHaptic(x, y) {
+            elements.hapticFlash.style.setProperty('--x', `${x}px`);
+            elements.hapticFlash.style.setProperty('--y', `${y}px`);
+            elements.hapticFlash.classList.add('active');
+            setTimeout(() => elements.hapticFlash.classList.remove('active'), 200);
+
+            if ('vibrate' in navigator) {
+                navigator.vibrate(10);
+            }
+        }
+
+        // Grid Generation
+        function createGrid() {
+            elements.grid.innerHTML = '<div class="focus-ring" id="focus-ring"></div><div class="pattern-indicator" id="pattern-indicator">OBSERVE</div>';
+            elements.grid.style.gridTemplateColumns = `repeat(${GameState.gridSize}, 1fr)`;
+
+            const cellCount = GameState.gridSize * GameState.gridSize;
+            for (let i = 0; i < cellCount; i++) {
+                const cell = document.createElement('div');
+                cell.className = 'echo-cell';
+                cell.dataset.index = i;
+                cell.addEventListener('touchstart', handleCellTouch, { passive: false });
+                cell.addEventListener('click', handleCellClick);
+                elements.grid.appendChild(cell);
+            }
+        }
+
+        // Pattern Generation - The Core Mechanic: "Thought Echoes"
+        function generatePattern() {
+            GameState.pattern = [];
+            const cellCount = GameState.gridSize * GameState.gridSize;
+            
+            // Generate unique positions and colors
+            const usedIndices = new Set();
+            
+            for (let i = 0; i < GameState.patternLength; i++) {
+                let index;
+                do {
+                    index = Math.floor(Math.random() * cellCount);
+                } while (usedIndices.has(index));
+                usedIndices.add(index);
+                
+                const color = GameState.colors[Math.floor(Math.random() * GameState.colors.length)];
+                GameState.pattern.push({ index, color });
+            }
+        }
+
+        // Show Pattern Sequence
+        async function showPattern() {
+            GameState.phase = 'watching';
+            elements.phaseText.textContent = 'OBSERVE';
+            document.getElementById('pattern-indicator').textContent = 'OBSERVE';
+            document.getElementById('pattern-indicator').classList.add('visible');
+            document.getElementById('focus-ring').classList.add('active');
+
+            await delay(1000);
+            document.getElementById('pattern-indicator').classList.remove('visible');
+
+            const cells = elements.grid.querySelectorAll('.echo-cell');
+            
+            for (let i = 0; i < GameState.pattern.length; i++) {
+                const { index, color } = GameState.pattern[i];
+                const cell = cells[index];
+                
+                // Update progress
+                elements.phaseFill.style.width = `${((i + 1) / GameState.pattern.length) * 100}%`;
+                
+                // Show cell with color
+                cell.classList.add('revealed', `echo-${color}`);
+                playColorSound(color);
+                
+                // Create echo visualization
+                createThoughtEcho(cell, color);
+                
+                await delay(GameState.showTime);
+                
+                cell.classList.remove('revealed', `echo-${color}`);
+                await delay(200);
+            }
+
+            startRecallPhase();
+        }
+
+        function createThoughtEcho(cell, color) {
+            const rect = cell.getBoundingClientRect();
+            const echo = document.createElement('div');
+            echo.className = 'thought-echo';
+            
+            const colorMap = {
+                cyan: 'var(--accent-cyan)',
+                purple: 'var(--accent-purple)',
+                pink: 'var(--accent-pink)',
+                gold: 'var(--accent-gold)'
+            };
+            
+            echo.style.borderColor = colorMap[color];
+            echo.style.left = `${rect.left + rect.width / 2}px`;
+            echo.style.top = `${rect.top + rect.height / 2}px`;
+            echo.style.width = '50px';
+            echo.style.height = '50px';
+            echo.style.marginLeft = '-25px';
+            echo.style.marginTop = '-25px';
+            
+            document.body.appendChild(echo);
+            
+            setTimeout(() => echo.remove(), 1500);
+        }
+
+        // Recall Phase
+        function startRecallPhase() {
+            GameState.phase = 'recalling';
+            GameState.playerInput = [];
+            elements.phaseText.textContent = 'RECALL';
+            elements.phaseFill.style.width = '0%';
+            document.getElementById('focus-ring').classList.remove('active');
+            document.getElementById('pattern-indicator').textContent = 'YOUR TURN';
+            document.getElementById('pattern-indicator').classList.add('visible');
+            
+            setTimeout(() => {
+                document.getElementById('pattern-indicator').classList.remove('visible');
+            }, 1000);
+        }
+
+        // Handle Cell Touch/Click
+        function handleCellTouch(e) {
+            e.preventDefault();
+            if (GameState.phase !== 'recalling') return;
+            
+            const touch = e.touches[0];
+            triggerHaptic(touch.clientX, touch.clientY);
+            processCellInput(e.currentTarget);
+        }
+
+        function handleCellClick(e) {
+            if (GameState.phase !== 'recalling') return;
+            triggerHaptic(e.clientX, e.clientY);
+            processCellInput(e.currentTarget);
+        }
+
+        function processCellInput(cell) {
+            const index = parseInt(cell.dataset.index);
+            const currentStep = GameState.playerInput.length;
+            const expectedPattern = GameState.pattern[currentStep];
+            
+            GameState.totalAttempts++;
+            
+            if (expectedPattern.index === index) {
+                // Correct!
+                GameState.playerInput.push(index);
+                GameState.correctAttempts++;
+                GameState.consecutiveCorrect++;
+                GameState.consecutiveWrong = 0;
+                
+                cell.classList.add('revealed', `echo-${expectedPattern.color}`, 'correct');
+                playColorSound(expectedPattern.color);
+                createThoughtEcho(cell, expectedPattern.color);
+                
+                // Add particles burst
+                const rect = cell.getBoundingClientRect();
+                particles.addBurst(
+                    rect.left + rect.width / 2,
+                    rect.top + rect.height / 2,
+                    `hsla(${expectedPattern.color === 'cyan' ? 180 : expectedPattern.color === 'purple' ? 280 : expectedPattern.color === 'pink' ? 330 : 45}, 70%, 60%, 0.8)`,
+                    15
+                );
+                
+                elements.phaseFill.style.width = `${((currentStep + 1) / GameState.pattern.length) * 100}%`;
+                
+                setTimeout(() => {
+                    cell.classList.remove('revealed', `echo-${expectedPattern.color}`, 'correct');
+                }, 300);
+                
+                // Check if pattern complete
+                if (GameState.playerInput.length === GameState.pattern.length) {
+                    levelComplete();
+                }
+            } else {
+                // Wrong!
+                GameState.consecutiveWrong++;
+                GameState.consecutiveCorrect = 0;
+                GameState.lives--;
+                
+                cell.classList.add('wrong');
+                playFailSound();
+                
+                setTimeout(() => cell.classList.remove('wrong'), 500);
+                
+                if (GameState.lives <= 0) {
+                    gameOver();
+                } else {
+                    // Adapt difficulty down
+                    adaptDifficulty('down');
+                    
+                    // Show correct answer briefly
+                    showCorrectAnswer();
+                }
+            }
+        }
+
+        async function showCorrectAnswer() {
+            GameState.phase = 'feedback';
+            const cells = elements.grid.querySelectorAll('.echo-cell');
+            
+            await delay(500);
+            
+            // Show what was expected
+            const currentStep = GameState.playerInput.length;
+            const expected = GameState.pattern[currentStep];
+            const cell = cells[expected.index];
+            
+            cell.classList.add('revealed', `echo-${expected.color}`);
+            await delay(1000);
+            cell.classList.remove('revealed', `echo-${expected.color}`);
+            
+            // Restart level
+            await delay(500);
+            startLevel();
+        }
+
+        // Adaptive Difficulty System
+        function adaptDifficulty(direction) {
+            elements.difficultyIndicator.classList.add('visible');
+            elements.difficultyIndicator.textContent = direction === 'up' ? 'MIND EXPANDING...' : 'RECALIBRATING...';
+            
+            setTimeout(() => {
+                elements.difficultyIndicator.classList.remove('visible');
+            }, 1500);
+            
+            if (direction === 'up') {
+                GameState.adaptiveDifficulty = Math.min(GameState.adaptiveDifficulty + 0.1, 2);
+                GameState.showTime = Math.max(400, GameState.showTime - 50);
+            } else {
+                GameState.adaptiveDifficulty = Math.max(GameState.adaptiveDifficulty - 0.1, 0.5);
+                GameState.showTime = Math.min(1200, GameState.showTime + 100);
+            }
+            
+            // Trigger perception shift effect
+            elements.grid.classList.add('perception-shift');
+            setTimeout(() => elements.grid.classList.remove('perception-shift'), 800);
+        }
+
+        // Level Complete
+        function levelComplete() {
+            GameState.phase = 'feedback';
+            GameState.score += GameState.patternLength * 100 * GameState.adaptiveDifficulty;
+            GameState.level++;
+            
+            playSuccessSound();
+            playAmbientPulse();
+            
+            // Adapt difficulty based on performance
+            if (GameState.consecutiveCorrect >= 3) {
+                adaptDifficulty('up');
+            }
+            
+            // Progress difficulty
+            if (GameState.level % 3 === 0 && GameState.patternLength < 8) {
+                GameState.patternLength++;
+            }
+            
+            if (GameState.level % 5 === 0 && GameState.gridSize < 5) {
+                GameState.gridSize++;
+                createGrid();
+            }
+            
+            updateUI();
+            
+            setTimeout(() => startLevel(), 1500);
+        }
+
+        // Start Level
+        function startLevel() {
+            updateUI();
+            generatePattern();
+            showPattern();
+        }
+
+        // Game Over
+        function gameOver() {
+            GameState.isPlaying = false;
+            
+            const accuracy = GameState.totalAttempts > 0 
+                ? Math.round((GameState.correctAttempts / GameState.totalAttempts) * 100) 
+                : 0;
+            
+            let mindState = 'Awakening';
+            if (accuracy >= 90) mindState = 'Transcendent';
+            else if (accuracy >= 75) mindState = 'Enlightened';
+            else if (accuracy >= 60) mindState = 'Focused';
+            else if (accuracy >= 40) mindState = 'Aware';
+            
+            elements.finalLevel.textContent = GameState.level - 1;
+            elements.finalScore.textContent = Math.round(GameState.score);
+            elements.finalAccuracy.textContent = `${accuracy}%`;
+            elements.finalState.textContent = mindState;
+            
+            if (GameState.level >= 10) {
+                elements.resultTitle.textContent = 'MIND MASTERY';
+            } else if (GameState.level >= 5) {
+                elements.resultTitle.textContent = 'ECHO COMPLETE';
+            } else {
+                elements.resultTitle.textContent = 'THOUGHTS FADED';
+            }
+            
+            setTimeout(() => showScreen('result'), 1000);
+        }
+
+        // Update UI
+        function updateUI() {
+            elements.levelDisplay.textContent = GameState.level;
+            elements.mindScore.textContent = Math.round(GameState.score);
+        }
+
+        // Reset Game
+        function resetGame() {
+            GameState.level = 1;
+            GameState.score = 0;
+            GameState.lives = 3;
+            GameState.pattern = [];
+            GameState.playerInput = [];
+            GameState.gridSize = 3;
+            GameState.patternLength = 3;
+            GameState.showTime = 800;
+            GameState.totalAttempts = 0;
+            GameState.correctAttempts = 0;
+            GameState.consecutiveCorrect = 0;
+            GameState.consecutiveWrong = 0;
+            GameState.adaptiveDifficulty = 1;
+            GameState.isPlaying = true;
+        }
+
+        // Utility
+        function delay(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        // Event Listeners
+        elements.startBtn.addEventListener('click', async () => {
+            await startAudio();
+            showScreen('game');
+            elements.tutorial.classList.add('active');
+        });
+
+        elements.tutorialBtn.addEventListener('click', () => {
+            elements.tutorial.classList.remove('active');
+            resetGame();
+            createGrid();
+            startLevel();
+        });
+
+        elements.playAgainBtn.addEventListener('click', () => {
+            showScreen('game');
+            resetGame();
+            createGrid();
+            startLevel();
+        });
+
+        // Touch handling for entire document to prevent scrolling during game
+        document.addEventListener('touchmove', (e) => {
+            if (GameState.isPlaying) {
+                e.preventDefault();
+            }
+        }, { passive: false });
+
+        // Initialize
+        createGrid();
+    </script>
+</body>
+</html>
